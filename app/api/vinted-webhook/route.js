@@ -13,12 +13,13 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { action, title, price } = body;
+    const { action, title, price, bought_at, sold_at } = body;
 
     if (!title || price === undefined) {
       return NextResponse.json({ error: 'Missing title or price' }, { status: 400 });
     }
 
+    // 1. AANKOOP OPSLAAN
     if (action === 'bought') {
       const { data, error } = await supabase
         .from('inventory')
@@ -27,15 +28,17 @@ export async function POST(request) {
             title: title,
             bought_price: price,
             status: 'Bought',
+            bought_at: bought_at || new Date().toISOString()
           },
         ]);
 
       if (error) throw error;
-
       return NextResponse.json({ message: 'Item toegevoegd aan voorraad', data }, { status: 200 });
     }
 
+    // 2. VERKOOP VERWERKEN
     if (action === 'sold') {
+      // Zoek een match in voorraad die nog niet verkocht is
       const { data: itemMatch, error: matchError } = await supabase
         .from('inventory')
         .select('*')
@@ -45,30 +48,31 @@ export async function POST(request) {
         .maybeSingle();
 
       if (itemMatch && !matchError) {
+        // Matchende aankoop gevonden -> Update naar Sold
         const { error: updateError } = await supabase
           .from('inventory')
           .update({
             sold_price: price,
-            sold_at: new Date().toISOString(),
+            sold_at: sold_at || new Date().toISOString(),
             status: 'Sold',
           })
           .eq('id', itemMatch.id);
 
         if (updateError) throw updateError;
-
         return NextResponse.json({ message: 'Item succesvol bijgewerkt naar Sold' }, { status: 200 });
       } else {
+        // Geen aankoop-match -> Sla op in unmatched_sales
         const { error: unmatchedError } = await supabase
           .from('unmatched_sales')
           .insert([
             {
               title: title,
               sold_price: price,
+              sold_at: sold_at || new Date().toISOString(),
             },
           ]);
 
         if (unmatchedError) throw unmatchedError;
-
         return NextResponse.json({ message: 'Geen match gevonden, opgeslagen bij unmatched_sales' }, { status: 200 });
       }
     }
