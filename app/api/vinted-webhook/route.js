@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -10,15 +11,15 @@ export async function POST(request) {
     if (authHeader !== process.env.VINTED_WEBHOOK_SECRET) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    
-const body = await request.json();
+
+    const body = await request.json();
     const { action, title, price } = body;
 
     if (!title || price === undefined) {
       return NextResponse.json({ error: 'Missing title or price' }, { status: 400 });
     }
-#bought
-if (action === 'bought') {
+
+    if (action === 'bought') {
       const { data, error } = await supabase
         .from('inventory')
         .insert([
@@ -33,17 +34,17 @@ if (action === 'bought') {
 
       return NextResponse.json({ message: 'Item toegevoegd aan voorraad', data }, { status: 200 });
     }
-#sold
-if (action === 'sold') {
+
+    if (action === 'sold') {
       const { data: itemMatch, error: matchError } = await supabase
         .from('inventory')
         .select('*')
         .eq('title', title)
         .neq('status', 'Sold')
         .limit(1)
-        .single();
+        .maybeSingle();
 
-if (itemMatch && !matchError) {
+      if (itemMatch && !matchError) {
         const { error: updateError } = await supabase
           .from('inventory')
           .update({
@@ -56,9 +57,7 @@ if (itemMatch && !matchError) {
         if (updateError) throw updateError;
 
         return NextResponse.json({ message: 'Item succesvol bijgewerkt naar Sold' }, { status: 200 });
-      }
-
-else {
+      } else {
         const { error: unmatchedError } = await supabase
           .from('unmatched_sales')
           .insert([
@@ -72,4 +71,12 @@ else {
 
         return NextResponse.json({ message: 'Geen match gevonden, opgeslagen bij unmatched_sales' }, { status: 200 });
       }
-    
+    }
+
+    return NextResponse.json({ error: 'Ongeldige actie' }, { status: 400 });
+
+  } catch (err) {
+    console.error('Webhook error:', err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
