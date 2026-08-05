@@ -72,4 +72,4 @@ else {
 
         return NextResponse.json({ message: 'Geen match gevonden, opgeslagen bij unmatched_sales' }, { status: 200 });
       }
-    }
+    
